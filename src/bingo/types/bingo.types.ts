@@ -30,6 +30,7 @@ export interface Room {
   players: Player[];
   drawnNumbers: BingoNumber[];
   state: BingoGameState;
+  selectedLetter: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +46,7 @@ export interface PublicRoomState {
   players: PublicPlayerView[];
   state: BingoGameState;
   drawnNumbers: BingoNumber[];
+  selectedLetter: string | null;
   winnerId?: string;
 }
 

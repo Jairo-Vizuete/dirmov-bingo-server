@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { BingoCard, BingoLetter, BingoNumber } from './types/bingo.types';
+import { AlphabetPatternsService } from './alphabet-patterns.service';
 
 @Injectable()
 export class CardService {
+  constructor(
+    private readonly alphabetPatternsService: AlphabetPatternsService,
+  ) {}
   generateCard(): BingoCard {
     const columns: Record<BingoLetter, number[]> = {
       B: this.generateUniqueNumbers(1, 15, 5),
@@ -40,25 +44,65 @@ export class CardService {
     };
   }
 
-  validateBingo(card: BingoCard, drawnNumbers: BingoNumber[]): boolean {
-    const drawnSet = new Set<number>(
-      drawnNumbers.map((n) => this.fromLetterValueToRaw(n)),
-    );
-
-    // horizontal
-    for (let row = 0; row < 5; row++) {
-      if (this.isFullLine(card, drawnSet, row, 'row')) return true;
+  validateBingo(
+    card: BingoCard,
+    drawnNumbers: BingoNumber[],
+    selectedLetter: string,
+  ): boolean {
+    // Validación estricta: solo se puede ganar con el patrón completo de la letra
+    if (!selectedLetter || selectedLetter.trim() === '') {
+      return false;
     }
 
-    // vertical
-    for (let col = 0; col < 5; col++) {
-      if (this.isFullLine(card, drawnSet, col, 'col')) return true;
+    try {
+      const pattern = this.alphabetPatternsService.getPattern(selectedLetter);
+      const drawnSet = new Set<number>(
+        drawnNumbers.map((n) => this.fromLetterValueToRaw(n)),
+      );
+
+      // Contar cuántas celdas del patrón deben estar marcadas
+      let requiredCells = 0;
+      let markedCells = 0;
+
+      // Validar que todas las celdas del patrón estén marcadas
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+          // Si el patrón requiere que esta celda esté marcada
+          if (pattern[row][col]) {
+            requiredCells++;
+
+            // Centro libre siempre cuenta si está marcado
+            if (row === 2 && col === 2) {
+              if (card.marked[row][col]) {
+                markedCells++;
+              } else {
+                return false; // Centro libre debe estar marcado si el patrón lo requiere
+              }
+              continue;
+            }
+
+            // Verificar que la celda esté marcada
+            if (!card.marked[row][col]) {
+              return false; // Celda del patrón no está marcada
+            }
+
+            markedCells++;
+
+            // Verificar que el número en esa celda esté en los números dibujados
+            const value = card.numbers[row][col];
+            if (value !== null && !drawnSet.has(value)) {
+              return false; // El número de esta celda no fue dibujado
+            }
+          }
+        }
+      }
+
+      // Validación final: todas las celdas requeridas deben estar marcadas
+      return requiredCells > 0 && markedCells === requiredCells;
+    } catch (error) {
+      // Si hay error obteniendo el patrón, no se puede validar
+      return false;
     }
-
-    // diagonales
-    if (this.isDiagonalBingo(card, drawnSet)) return true;
-
-    return false;
   }
 
   createBingoNumber(
@@ -89,52 +133,6 @@ export class CardService {
 
   private fromLetterValueToRaw(num: BingoNumber): number {
     return num.value;
-  }
-
-  private isFullLine(
-    card: BingoCard,
-    drawnSet: Set<number>,
-    index: number,
-    axis: 'row' | 'col',
-  ): boolean {
-    for (let i = 0; i < 5; i++) {
-      const row = axis === 'row' ? index : i;
-      const col = axis === 'col' ? index : i;
-      const value = card.numbers[row][col];
-
-      if (row === 2 && col === 2) continue; // centro libre
-
-      if (value == null || !drawnSet.has(value)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private isDiagonalBingo(card: BingoCard, drawnSet: Set<number>): boolean {
-    // principal
-    let diag1 = true;
-    for (let i = 0; i < 5; i++) {
-      if (i === 2) continue;
-      const value = card.numbers[i][i];
-      if (value == null || !drawnSet.has(value)) {
-        diag1 = false;
-        break;
-      }
-    }
-
-    // secundaria
-    let diag2 = true;
-    for (let i = 0; i < 5; i++) {
-      if (i === 2) continue;
-      const value = card.numbers[i][4 - i];
-      if (value == null || !drawnSet.has(value)) {
-        diag2 = false;
-        break;
-      }
-    }
-
-    return diag1 || diag2;
   }
 
   private getLetterForValue(value: number): BingoLetter {

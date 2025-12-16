@@ -26,6 +26,7 @@ export class BingoService {
       players: [],
       drawnNumbers: [],
       state: 'waiting',
+      selectedLetter: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -50,6 +51,7 @@ export class BingoService {
       players: [],
       drawnNumbers: [],
       state: 'waiting',
+      selectedLetter: null,
       createdAt: this.room.createdAt ?? now,
       updatedAt: now,
     };
@@ -103,12 +105,19 @@ export class BingoService {
     };
   }
 
-  startGame(socketId: string): PublicRoomState {
+  startGame(socketId: string, selectedLetter: string): PublicRoomState {
     this.ensureHost(socketId);
     if (this.room.state !== 'waiting') {
       throw new BadRequestException('Game cannot be started now');
     }
 
+    if (!selectedLetter || !/^[A-Z]$/i.test(selectedLetter)) {
+      throw new BadRequestException(
+        'Selected letter must be a single letter A-Z',
+      );
+    }
+
+    this.room.selectedLetter = selectedLetter.toUpperCase();
     this.room.state = 'playing';
     this.room.drawnNumbers = [];
     this.winnerId = undefined;
@@ -130,6 +139,7 @@ export class BingoService {
     }));
     this.room.state = 'waiting';
     this.room.drawnNumbers = [];
+    this.room.selectedLetter = null;
     this.winnerId = undefined;
     this.updateTimestamp();
 
@@ -147,6 +157,7 @@ export class BingoService {
       players: [],
       drawnNumbers: [],
       state: 'waiting',
+      selectedLetter: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -185,9 +196,14 @@ export class BingoService {
       throw new BadRequestException('Game is not in playing state');
     }
 
+    if (!this.room.selectedLetter) {
+      throw new BadRequestException('No letter selected for this game');
+    }
+
     const valid = this.cardService.validateBingo(
       player.card,
       this.room.drawnNumbers,
+      this.room.selectedLetter,
     );
 
     if (valid) {
@@ -326,6 +342,7 @@ export class BingoService {
       })),
       state: this.room.state,
       drawnNumbers: this.room.drawnNumbers,
+      selectedLetter: this.room.selectedLetter,
       winnerId: this.winnerId,
     };
   }

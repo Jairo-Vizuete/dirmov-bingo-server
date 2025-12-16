@@ -75,9 +75,20 @@ export class BingoGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('startGame')
-  handleStartGame(@ConnectedSocket() client: Socket) {
+  handleStartGame(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { selectedLetter: string },
+  ) {
     try {
-      const room = this.bingoService.startGame(client.id);
+      if (!body.selectedLetter || !/^[A-Z]$/i.test(body.selectedLetter)) {
+        throw new BadRequestException(
+          'selectedLetter is required and must be a single letter A-Z',
+        );
+      }
+      const room = this.bingoService.startGame(
+        client.id,
+        body.selectedLetter,
+      );
       this.server.emit('gameStarted', room);
       const players = this.bingoService.getPlayers();
       players.forEach((player) => {
